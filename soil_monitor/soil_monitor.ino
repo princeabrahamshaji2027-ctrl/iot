@@ -128,6 +128,9 @@ void sendTelemetry() {
   Serial.printf("[AgroConnect] Connecting to HTTPS endpoint: %s\n", api_url);
 
   if (https.begin(client, api_url)) {
+    // Render's free plan sleeps when idle; the first request can take 30-60 s to wake it
+    https.setConnectTimeout(30000);
+    https.setTimeout(60000);
     https.addHeader("Content-Type", "application/json");
     https.addHeader("X-Device-Token", device_token);
     https.addHeader("User-Agent", "ESP32-AgroConnect/1.0");
