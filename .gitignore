@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Arduino compilation cache and builds
+soil_monitor/build/
+*.bin
+*.elf
+*.map
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor configuration
+.vscode/
+.idea/
+

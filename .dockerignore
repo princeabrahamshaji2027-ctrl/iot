@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+.git
+.gitignore
+.dockerignore
+soil_monitor
+documentation
+tests
+agent.md
+*.md
+.DS_Store
+

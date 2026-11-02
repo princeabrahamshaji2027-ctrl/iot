@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroConnect Cloud — IoT Soil Moisture Monitor</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Chart.js for Historical Soil Moisture Telemetry -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>AgroConnect</h1>
+    <p class="subtitle">Cloud IoT Soil Moisture Monitoring</p>
+  </header>
+
+  <main class="dashboard-container">
+    <!-- Live Status Card -->
+    <section class="card" aria-label="Current Soil Moisture Reading">
+      <div class="card-header">
+        <h2>Live Soil Moisture</h2>
+        <div id="deviceBadge" class="badge badge-offline">Checking Device...</div>
+      </div>
+
+      <div class="value-display">
+        <span id="percent">--</span><span class="unit">%</span>
+      </div>
+
+      <div class="bar-container" aria-hidden="true">
+        <div id="fill" class="bar-fill"></div>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-item">
+          <span class="metric-label">Status</span>
+          <b id="status" class="metric-value">Connecting...</b>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Sensor Raw (12-bit)</span>
+          <b id="raw" class="metric-value">--</b>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Device ID</span>
+          <b id="deviceId" class="metric-value">esp32-soil-01</b>
+        </div>
+      </div>
+
+      <div class="card-footer">
+        <p class="note" id="updated">Awaiting initial telemetry...</p>
+        <p class="note sub-note" id="lastSeen">Last seen: --</p>
+      </div>
+    </section>
+
+    <!-- Historical Telemetry Chart Card -->
+    <section class="card chart-card" aria-label="Moisture History Chart">
+      <div class="card-header">
+        <h2>Moisture Trends</h2>
+        <span class="badge badge-info">Real-time History</span>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>AgroConnect IoT System &bull; Render Cloud &bull; PostgreSQL</p>
+  </footer>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
+

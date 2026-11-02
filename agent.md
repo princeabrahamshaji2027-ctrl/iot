@@ -1,239 +1,278 @@
-# COMPLETE ESP32 DEVELOPMENT ENVIRONMENT SETUP AND HARDWARE DETECTION PREPARATION
+# TASK: Prepare AgroConnect-IoT for Render Blueprint Deployment Using Docker
 
-Act as a senior embedded systems engineer specializing in ESP32, Arduino, macOS, USB-to-UART drivers and IoT development.
+Act as a senior DevOps engineer and backend developer. I am building a separate ESP32-based IoT soil moisture monitoring project called **AgroConnect-IoT**.
 
-I am working on my existing AgroConnect IoT Soil Moisture Monitoring project.
+Your job is to inspect my existing project, create a complete and working Render Blueprint configuration, configure Docker deployment, and prepare the project for deployment through GitHub.
 
-Previously, I experienced a problem where my MacBook powered the ESP32 (its power LED illuminated), but macOS did not recognize the board as a serial device.
+IMPORTANT: Do not just explain what I should do. Actually inspect the project, create the required files, modify the necessary code, install dependencies if needed, run tests, and fix errors.
 
-I suspect that my development environment, board packages, USB drivers or USB connection configuration may be incomplete.
+## 1. Inspect the existing project first
 
-I want you to completely inspect, install, configure and verify my ESP32 development environment before I reconnect the physical ESP32.
+Before making any changes:
 
-IMPORTANT: Execute the actual setup commands wherever possible. Do not merely explain how to install things.
+- Inspect the complete project directory and its folder structure.
+- Identify the existing ESP32 firmware, backend, frontend, database code and configuration.
+- Identify the programming language and framework currently used.
+- Understand how the existing dashboard works.
+- Identify how ESP32 currently sends or exposes sensor readings.
+- Identify existing dependencies and startup commands.
+- Check whether Dockerfile, render.yaml, requirements.txt, or other deployment files already exist.
 
-## PHASE 1 — INSPECT MY MAC
+Do not assume that the project uses a particular framework. Adapt the deployment architecture to the actual codebase.
 
-First identify:
+Do not delete existing working features or replace the application unnecessarily.
 
-1. macOS version.
-2. System architecture (Intel or Apple Silicon).
-3. Existing Homebrew installation.
-4. Existing Arduino CLI installation.
-5. Existing Arduino IDE installation.
-6. Existing ESP32 Arduino Core installation.
-7. Existing USB serial drivers.
-8. Existing serial device permissions and available serial ports.
-9. Existing project directory and firmware files.
+Do not modify my main AgroConnect project or unrelated repositories.
 
-Check whether the previous installations are valid.
+## 2. Required cloud architecture
 
-Do not unnecessarily reinstall working dependencies.
+Implement this architecture:
 
-## PHASE 2 — INSTALL AND CONFIGURE ARDUINO CLI
+ESP32 Soil Moisture Sensor
+        |
+        | Reads analog values from GPIO34
+        |
+        | Sends readings using HTTPS
+        v
+Render Cloud Backend (Docker Container)
+        |
+        v
+PostgreSQL Database
+        |
+        v
+Public Web Dashboard
 
-If Arduino CLI is missing, install it using the appropriate official method for my macOS architecture.
+The ESP32 is physical hardware. It must NOT be placed inside the Docker container.
 
-Verify:
+The Docker container must host the cloud backend and the web dashboard.
 
-arduino-cli version
+The ESP32 must connect to Wi-Fi and send real sensor readings to the deployed backend.
 
-Initialize its configuration if necessary:
+## 3. Create the Render Blueprint file
 
-arduino-cli config init
+Create a valid file named:
 
-Configure the official Espressif ESP32 board manager URL:
+render.yaml
 
-https://espressif.github.io/arduino-esp32/package_esp32_index.json
+Place it in the repository root.
 
-Update the package index:
+Use the current official Render Blueprint specification:
+https://render.com/docs/blueprint-spec
 
-arduino-cli core update-index
+Requirements:
 
-Install the ESP32 Arduino Core:
+- Define a web service using runtime: docker.
+- Configure the correct Dockerfile path and Docker build context based on the actual project structure.
+- Configure a suitable healthCheckPath.
+- Define a PostgreSQL database using the Blueprint databases section.
+- Configure database connection environment variables using Render's supported fromDatabase references.
+- Configure all necessary environment variables.
+- Generate or securely configure sensitive credentials using supported Render mechanisms.
+- Never hardcode database passwords, Wi-Fi passwords, API keys or device tokens.
+- Use appropriate service and database names.
+- Make sure the YAML syntax and indentation are valid.
+- Do not use outdated or unsupported Render Blueprint properties.
+- Avoid unnecessary paid resources. Use an appropriate available plan and clearly tell me if a required resource is paid.
+- Do not create unnecessary additional services.
 
-arduino-cli core install esp32:esp32
+The Blueprint must be designed so I can connect the GitHub repository to Render and deploy it using New + → Blueprint.
 
-Verify:
+## 4. Docker configuration
 
-arduino-cli core list
+Create or update the following files:
 
-Confirm that the ESP32 platform is installed and usable.
+- Dockerfile
+- .dockerignore
+- .gitignore
 
-## PHASE 3 — INSTALL AND VERIFY REQUIRED ESP32 LIBRARIES
+Requirements:
 
-Inspect my existing firmware.
+- Docker must install all required application dependencies.
+- Docker must build the application successfully.
+- The container must start the backend using the correct production startup command.
+- The application must listen on 0.0.0.0.
+- It must use Render's assigned PORT environment variable where supported by the framework.
+- The application must not depend on local development paths.
+- Do not copy secrets or local environment files into the Docker image.
+- Keep the Docker image reasonably small.
+- Use production-appropriate settings.
 
-The project uses:
+Official Docker deployment documentation:
+https://render.com/docs/docker
 
-- WiFi.h
-- WebServer.h
+## 5. Backend and database configuration
 
-Check that these libraries are available through the installed ESP32 Arduino Core.
+Inspect the existing backend before modifying it.
 
-Do not install duplicate libraries unnecessarily.
+Ensure the backend supports:
 
-Identify any other missing dependencies from the actual source code and install only those required.
+POST /api/iot/readings
+GET /api/iot/latest
+GET /api/iot/history
+GET /api/iot/status
+GET /health
 
-## PHASE 4 — INSTALL OR VERIFY USB-TO-SERIAL DRIVER SUPPORT
+Requirements:
 
-This is particularly important because my Mac previously powered the ESP32 but failed to detect its serial interface.
+- Receive ESP32 sensor readings.
+- Validate incoming JSON.
+- Authenticate the device using a secure token.
+- Store readings in PostgreSQL.
+- Retrieve the latest reading.
+- Retrieve historical readings.
+- Calculate or return moisture status.
+- Return appropriate HTTP error codes.
+- Handle database connection failures safely.
+- Use environment variables for database credentials and secrets.
+- Use database migrations or safe table initialization.
+- Do not generate fake sensor readings in production.
 
-Inspect the macOS USB serial driver environment.
+Expected incoming payload:
 
-Check support for the following USB-to-UART chip families:
+{
+  "device_id": "esp32-soil-01",
+  "raw": 2100,
+  "moisture": 45,
+  "status": "Moderate"
+}
 
-1. Silicon Labs CP2102 / CP210x.
-2. WCH CH340 / CH341.
-3. FTDI USB-to-Serial.
-4. Native ESP32 USB serial/JTAG interfaces, if applicable.
+Adapt field names to the existing firmware if necessary.
 
-IMPORTANT DRIVER RULES:
+## 6. Frontend dashboard
 
-- Do not install every available driver blindly.
-- Do not install unofficial or suspicious driver packages.
-- Prefer official manufacturer drivers.
-- Check macOS version and processor compatibility before installation.
-- If a driver requires elevated privileges, explain the installation and ask for approval.
-- If macOS requires a restart or user approval under Privacy & Security, tell me.
-- Do not claim a driver is installed unless verified.
+Preserve the existing dashboard design wherever possible.
 
-Since the physical ESP32 is not currently available for chip identification, prepare the environment and explain that the correct USB driver can only be selected confidently after identifying the actual USB interface.
+Ensure it:
 
-Official driver sources:
+- Displays the latest actual soil moisture percentage.
+- Displays the raw sensor value.
+- Displays Dry, Moderate or Wet status.
+- Shows the last updated timestamp.
+- Displays historical readings using a chart if the project already supports one or it can be added without unnecessary complexity.
+- Refreshes readings periodically.
+- Shows a clear offline/stale status if the ESP32 stops sending data.
+- Does not show fabricated readings when no device data exists.
+- Works through the public Render URL.
+- Does not rely on localhost API URLs in production.
 
-Silicon Labs:
-https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
+If the frontend and backend are separate, configure their production communication correctly.
 
-WCH:
-https://www.wch-ic.com/downloads/CH341SER_MAC_ZIP.html
+## 7. ESP32 firmware changes
 
-FTDI:
-https://ftdichip.com/drivers/
+Inspect the existing .ino firmware.
 
-## PHASE 5 — VERIFY MACOS SERIAL SUPPORT
+Preserve the current sensor calibration and GPIO34 configuration unless there is a technical reason to change it.
 
-Inspect the available serial interfaces using:
+Modify the firmware so that:
 
-ls /dev/cu.*
+- ESP32 connects to the configured Wi-Fi network.
+- It sends readings to the deployed Render API using HTTPS.
+- It sends readings at a reasonable interval, approximately every 10–30 seconds.
+- It handles network disconnections and reconnects.
+- It handles failed HTTP requests without crashing.
+- It uses secure TLS certificate validation.
+- It does not use WiFiClientSecure.setInsecure() as a production security shortcut.
+- It sends the device authentication token securely configured for the device.
+- It prints useful diagnostic information to Serial Monitor.
 
-ls /dev/tty.*
+Keep firmware separate from the backend Docker build.
 
-system_profiler SPUSBDataType
+Clearly document where I must enter the Wi-Fi SSID, Wi-Fi password, Render API URL and device token.
 
-Check available USB devices and driver information using appropriate macOS commands.
+Remember: credentials embedded in firmware can be extracted from the physical device. Document the risks and provide a way to rotate the device token.
 
-Run:
+## 8. Security requirements
 
-arduino-cli board list
+- Never commit .env files.
+- Never expose database credentials in frontend JavaScript.
+- Never expose the device authentication token in dashboard responses.
+- Validate device authentication on incoming readings.
+- Use HTTPS for communication.
+- Configure CORS only if actually required.
+- Avoid permissive production security settings.
+- Do not log passwords or authentication tokens.
 
-Explain which devices are internal Bluetooth interfaces and which devices could represent an ESP32 serial connection.
+## 9. Local testing
 
-Do not mistake Bluetooth ports for the ESP32.
+Before declaring the project ready:
 
-## PHASE 6 — VERIFY THE EXISTING AGROCONNECT PROJECT
+- Validate render.yaml syntax.
+- Validate the Dockerfile.
+- Build the Docker image.
+- Run the container locally.
+- Test the health endpoint.
+- Test database connectivity.
+- Test the API using a sample request in a development/test environment.
+- Verify that the dashboard loads.
+- Check that no localhost URLs are used for production API calls.
+- Check that secrets are not committed.
+- Fix any errors discovered.
 
-Locate the existing project and inspect:
+Do not claim that the physical ESP32 has been tested unless actual hardware has been connected and tested.
 
-soil_monitor/soil_monitor.ino
+## 10. GitHub preparation
 
-Verify:
+Prepare the project for my separate GitHub repository:
 
-- Correct ESP32 firmware structure.
-- GPIO 34 sensor configuration.
-- Existing Wi-Fi SSID and password preserved.
-- Soil moisture calibration values preserved.
-- Wi-Fi connection and reconnection logic.
-- HTTP server on port 80.
-- Root dashboard endpoint.
-- /data JSON endpoint.
-- Embedded HTML, CSS and JavaScript.
+AgroConnect-IoT
 
-Do not unnecessarily redesign or rewrite the dashboard.
+- Ensure all required files are in the correct repository root.
+- Ensure render.yaml is in the root directory.
+- Ensure Dockerfile paths match the actual project structure.
+- Update README.md with deployment instructions.
+- Check .gitignore.
+- Show me the exact Git commands needed to push the project.
 
-## PHASE 7 — COMPILE THE PROJECT WITHOUT HARDWARE
+Do not push to GitHub automatically.
+Do not overwrite branches.
+Do not delete existing files or commits.
 
-Use the existing ESP32 board configuration.
+Wait for my approval before any GitHub push or external deployment action.
 
-Run:
+## 11. Final deployment instructions
 
-arduino-cli compile --fqbn esp32:esp32:esp32 ./soil_monitor
+When implementation and local tests are complete, provide:
 
-Resolve any compilation errors.
+1. Final project folder structure.
+2. All files created and modified.
+3. Complete render.yaml configuration.
+4. Docker build and test results.
+5. Required environment variables.
+6. Which secrets I must enter manually in Render.
+7. Exact GitHub push commands.
+8. Exact Render Blueprint deployment steps.
+9. Physical ESP32 wiring instructions.
+10. Steps to upload firmware.
+11. Steps to connect ESP32 to my phone hotspot.
+12. Steps to verify live readings on the public dashboard.
 
-Verify:
+## 12. Open the website after deployment
 
-- Firmware compiles successfully.
-- Required libraries are available.
-- Memory usage is reported.
-- Generated firmware files are available.
+After I approve deployment and the actual Render service successfully deploys:
 
-Do not attempt firmware upload because the physical ESP32 has not yet been connected.
+- Retrieve the real public Render URL from the deployment.
+- Open that URL in the browser.
+- Verify that the dashboard loads.
+- Check the health endpoint.
+- Report whether the database is connected.
+- Tell me whether live ESP32 readings are arriving.
 
-## PHASE 8 — PREPARE HARDWARE DETECTION PROCEDURE
+Do not invent a Render URL or claim that the deployment succeeded without verification.
 
-Prepare the commands that will be used when I connect my ESP32.
+## IMPORTANT WORKING RULES
 
-The next hardware detection commands should include:
+Work directly on my existing project.
 
-system_profiler SPUSBDataType
+Do not stop after creating render.yaml.
 
-ls /dev/cu.*
+Do not give me a theoretical tutorial instead of implementing the files.
 
-arduino-cli board list
+Do not replace my existing dashboard unnecessarily.
 
-Explain how to identify the USB-to-UART chip and its corresponding serial port.
+Do not modify unrelated projects.
 
-Prepare the upload command using the actual detected serial port, but do not execute it.
+Do not use mock data to pretend the hardware is working.
 
-## PHASE 9 — IMPORTANT STOP CONDITION
+If something requires my account login, approval, physical hardware, or a secret, stop at that exact step and tell me what I need to do.
 
-THIS IS MANDATORY.
-
-After completing all possible software installations, configurations, driver checks, project verification and firmware compilation:
-
-STOP ALL FURTHER EXECUTION.
-
-Do not ask me to turn on my phone hotspot yet.
-
-Do not attempt to upload firmware.
-
-Do not invent a serial port.
-
-Do not claim that the physical ESP32 has been detected.
-
-Instead, display a clear message:
-
-"SOFTWARE ENVIRONMENT READY.
-
-All possible software dependencies and board configurations have been checked.
-
-Your firmware has been compiled if the compiler confirms success.
-
-Now connect your physical ESP32 directly to your MacBook using a known USB data cable.
-
-Avoid using the docking station initially.
-
-Once connected, tell me to notify you so that you can scan the USB devices again and identify the correct driver and serial port."
-
-Wait for my response before continuing to hardware detection.
-
-## STRICT RULES
-
-1. Work on macOS, not Windows.
-2. Use official software and driver sources.
-3. Preserve all existing project files.
-4. Never expose Wi-Fi credentials.
-5. Do not install unnecessary dependencies.
-6. Do not modify unrelated projects.
-7. Do not commit or push unrelated Git changes.
-8. Execute safe installation and verification tasks.
-9. Ask permission for privileged operations.
-10. Report actual results, not assumptions.
-11. Stop before physical hardware connection.
-
-FINAL OBJECTIVE:
-
-Prepare a fully configured macOS ESP32 development environment that is ready to recognize my physical ESP32, compile the AgroConnect firmware and upload it once I connect the board.
-
-Start with PHASE 1 and continue sequentially until the mandatory stop condition.
+Start by inspecting the project, then implement the complete deployment configuration.
