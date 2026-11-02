@@ -3,14 +3,15 @@ const { Pool } = require('pg');
 let pool = null;
 let isDbConnected = false;
 
-// In-memory fallback storage for local development/testing without PostgreSQL
+// In-memory fallback for offline testing/development when PostgreSQL is not running
 const memoryReadings = [];
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production';
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
+      // Render PostgreSQL requires SSL in production
       ssl: isProduction ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30000,
@@ -28,7 +29,7 @@ function getPool() {
 async function initDatabase() {
   const p = getPool();
   if (!p) {
-    console.warn('[Database] DATABASE_URL not configured. Running with in-memory fallback storage.');
+    console.warn('[Database] DATABASE_URL not set. Running with safe in-memory fallback for local testing.');
     isDbConnected = false;
     return false;
   }
@@ -36,53 +37,62 @@ async function initDatabase() {
   try {
     const client = await p.connect();
     try {
+      // Create table per specification
       await client.query(`
-        CREATE TABLE IF NOT EXISTS readings (
+        CREATE TABLE IF NOT EXISTS soil_moisture_readings (
           id SERIAL PRIMARY KEY,
           device_id VARCHAR(64) NOT NULL,
-          raw INTEGER NOT NULL,
-          moisture INTEGER NOT NULL,
+          raw_value INTEGER NOT NULL,
+          moisture_percentage INTEGER NOT NULL,
           status VARCHAR(32) NOT NULL,
           created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
-        CREATE INDEX IF NOT EXISTS idx_readings_device_created 
-          ON readings(device_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_soil_readings_device_id 
+          ON soil_moisture_readings(device_id);
+        CREATE INDEX IF NOT EXISTS idx_soil_readings_created_at 
+          ON soil_moisture_readings(created_at DESC);
       `);
       isDbConnected = true;
-      console.log('[Database] PostgreSQL connected and table schema verified.');
+      console.log('[Database] PostgreSQL connected: table "soil_moisture_readings" ready with indexes.');
       return true;
     } finally {
       client.release();
     }
   } catch (err) {
-    console.error('[Database] Failed to initialize PostgreSQL:', err.message);
+    console.error('[Database] PostgreSQL connection failed:', err.message);
     isDbConnected = false;
     return false;
   }
 }
 
-async function saveReading({ device_id, raw, moisture, status }) {
+async function saveReading({ device_id, raw_value, moisture_percentage, status }) {
   const p = getPool();
   if (p && isDbConnected) {
     try {
-      const res = await p.query(
-        `INSERT INTO readings (device_id, raw, moisture, status)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, device_id, raw, moisture, status, created_at`,
-        [device_id, raw, moisture, status]
-      );
-      return res.rows[0];
+      const query = `
+        INSERT INTO soil_moisture_readings (device_id, raw_value, moisture_percentage, status)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, device_id, raw_value, moisture_percentage, status, created_at;
+      `;
+      const res = await p.query(query, [device_id, raw_value, moisture_percentage, status]);
+      const row = res.rows[0];
+      // Attach backward-compatible property aliases
+      row.raw = row.raw_value;
+      row.moisture = row.moisture_percentage;
+      return row;
     } catch (err) {
-      console.error('[Database] Insert error:', err.message);
+      console.error('[Database] Failed to insert reading:', err.message);
       throw err;
     }
   } else {
-    // Memory fallback
+    // In-memory fallback
     const reading = {
       id: memoryReadings.length + 1,
       device_id,
-      raw: Number(raw),
-      moisture: Number(moisture),
+      raw_value: Number(raw_value),
+      moisture_percentage: Number(moisture_percentage),
+      raw: Number(raw_value),
+      moisture: Number(moisture_percentage),
       status,
       created_at: new Date().toISOString()
     };
@@ -96,11 +106,20 @@ async function getLatestReading(deviceId) {
   const p = getPool();
   if (p && isDbConnected) {
     const query = deviceId
-      ? `SELECT * FROM readings WHERE device_id = $1 ORDER BY created_at DESC LIMIT 1`
-      : `SELECT * FROM readings ORDER BY created_at DESC LIMIT 1`;
+      ? `SELECT id, device_id, raw_value, moisture_percentage, status, created_at 
+         FROM soil_moisture_readings 
+         WHERE device_id = $1 
+         ORDER BY created_at DESC LIMIT 1;`
+      : `SELECT id, device_id, raw_value, moisture_percentage, status, created_at 
+         FROM soil_moisture_readings 
+         ORDER BY created_at DESC LIMIT 1;`;
     const params = deviceId ? [deviceId] : [];
     const res = await p.query(query, params);
-    return res.rows[0] || null;
+    if (!res.rows[0]) return null;
+    const row = res.rows[0];
+    row.raw = row.raw_value;
+    row.moisture = row.moisture_percentage;
+    return row;
   } else {
     if (memoryReadings.length === 0) return null;
     if (deviceId) {
@@ -117,17 +136,27 @@ async function getReadingHistory(deviceId, limit = 50) {
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
   const p = getPool();
   if (p && isDbConnected) {
+    // Sort newest first as specified in Section 6 ("Sort newest first")
     const query = deviceId
-      ? `SELECT * FROM readings WHERE device_id = $1 ORDER BY created_at DESC LIMIT $2`
-      : `SELECT * FROM readings ORDER BY created_at DESC LIMIT $1`;
+      ? `SELECT id, device_id, raw_value, moisture_percentage, status, created_at 
+         FROM soil_moisture_readings 
+         WHERE device_id = $1 
+         ORDER BY created_at DESC LIMIT $2;`
+      : `SELECT id, device_id, raw_value, moisture_percentage, status, created_at 
+         FROM soil_moisture_readings 
+         ORDER BY created_at DESC LIMIT $1;`;
     const params = deviceId ? [deviceId, safeLimit] : [safeLimit];
     const res = await p.query(query, params);
-    return res.rows.reverse(); // Chronological order
+    return res.rows.map(row => {
+      row.raw = row.raw_value;
+      row.moisture = row.moisture_percentage;
+      return row;
+    });
   } else {
     let filtered = deviceId
       ? memoryReadings.filter(r => r.device_id === deviceId)
       : memoryReadings;
-    const slice = filtered.slice(-safeLimit);
+    const slice = filtered.slice(-safeLimit).reverse(); // Newest first
     return slice;
   }
 }
@@ -143,4 +172,3 @@ module.exports = {
   getReadingHistory,
   checkDbHealth
 };
-

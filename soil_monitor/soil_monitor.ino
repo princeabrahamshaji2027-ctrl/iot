@@ -9,14 +9,15 @@
 //
 // CONFIGURATION INSTRUCTIONS:
 // 1. Enter your Wi-Fi SSID and Password below.
-// 2. Once your Render Blueprint is deployed, copy your web service URL:
-//    e.g. "https://agroconnect-backend.onrender.com/api/iot/readings"
-// 3. Copy the DEVICE_AUTH_TOKEN generated in your Render Dashboard.
+// 2. Set api_url to your live Render endpoint:
+//    "https://agroconnect-backend-ln2g.onrender.com/api/iot/readings"
+// 3. Set device_token to the DEVICE_API_TOKEN from your Render Dashboard.
 // 4. IMPORTANT SECURITY NOTE:
 //    Tokens embedded in microcontroller firmware can be extracted if physical
-//    access to the board is compromised. To rotate the token, update the
-//    DEVICE_AUTH_TOKEN variable in Render Environment Settings, update it below,
-//    and re-flash the board.
+//    access to the board is compromised. To rotate the token:
+//    - Generate a new 32-byte hex token (e.g., openssl rand -hex 32)
+//    - Add it to DEVICE_API_TOKEN in Render Environment (supports comma-separated list)
+//    - Update device_token below and re-flash the board.
 // ===========================================================================
 
 // --- Wi-Fi Settings ---
@@ -24,12 +25,11 @@ const char *ssid = "Nothing Phone (2)_4867";
 const char *password = "4256";
 
 // --- Render Cloud Backend Settings ---
-// Set to your live Render web service URL (must begin with https://)
-const char *api_url = "https://agroconnect-backend.onrender.com/api/iot/readings";
+const char *api_url = "https://agroconnect-backend-ln2g.onrender.com/api/iot/readings";
 
 // --- Device Authentication ---
 const char *device_id = "esp32-soil-01";
-const char *device_token = "REPLACE_WITH_YOUR_RENDER_DEVICE_AUTH_TOKEN";
+const char *device_token = "REPLACE_WITH_YOUR_RENDER_DEVICE_API_TOKEN";
 
 // --- Hardware & Calibration Settings ---
 const int SOIL_PIN = 34; // ADC1 Channel 6 (No Wi-Fi conflict)
@@ -111,11 +111,11 @@ void sendTelemetry() {
   Serial.printf("[AgroConnect] Sensor Reading -> Raw: %d, Moisture: %d%%, Status: %s\n",
                 raw, moisture, status.c_str());
 
-  // 2. Build JSON payload
+  // 2. Build JSON payload conforming to PostgreSQL schema fields
   String payload = "{";
   payload += "\"device_id\":\"" + String(device_id) + "\",";
-  payload += "\"raw\":" + String(raw) + ",";
-  payload += "\"moisture\":" + String(moisture) + ",";
+  payload += "\"raw_value\":" + String(raw) + ",";
+  payload += "\"moisture_percentage\":" + String(moisture) + ",";
   payload += "\"status\":\"" + status + "\"";
   payload += "}";
 

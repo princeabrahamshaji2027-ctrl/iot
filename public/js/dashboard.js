@@ -71,13 +71,16 @@ async function fetchLatest() {
     }
 
     const data = body.data;
-    document.getElementById('percent').textContent = data.moisture;
-    document.getElementById('raw').textContent = data.raw;
+    const moisture = data.moisture_percentage !== undefined ? data.moisture_percentage : data.moisture;
+    const rawVal = data.raw_value !== undefined ? data.raw_value : data.raw;
+
+    document.getElementById('percent').textContent = moisture;
+    document.getElementById('raw').textContent = rawVal;
     document.getElementById('status').textContent = data.status;
     document.getElementById('deviceId').textContent = data.device_id || 'esp32-soil-01';
 
     const fillEl = document.getElementById('fill');
-    fillEl.style.width = data.moisture + '%';
+    fillEl.style.width = moisture + '%';
 
     if (data.status === 'Dry') {
       fillEl.style.backgroundColor = '#dc3545';
@@ -133,11 +136,13 @@ async function fetchHistory() {
     const body = await res.json();
 
     if (body.data && historyChart) {
-      const labels = body.data.map(r => {
+      // Reverse array so chart displays chronologically from left to right
+      const chronological = [...body.data].reverse();
+      const labels = chronological.map(r => {
         const d = new Date(r.created_at);
         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       });
-      const values = body.data.map(r => r.moisture);
+      const values = chronological.map(r => r.moisture_percentage !== undefined ? r.moisture_percentage : r.moisture);
 
       historyChart.data.labels = labels;
       historyChart.data.datasets[0].data = values;
