@@ -1,19 +1,15 @@
 # Render Blueprint Specification for AgroConnect-IoT
 # Official Spec: https://render.com/docs/blueprint-spec
-
-version: "1"
-
-databases:
-  - name: agroconnect-iot-db
-    databaseName: agroconnect_iot
-    user: agroconnect_user
-    plan: free # NOTE: Render free tier PostgreSQL instances expire after 30 days; upgrade to Starter ($7/mo) for permanent retention.
+#
+# The database is hosted on Supabase (not Render). This Blueprint deploys one Docker
+# web service that serves both the dashboard (public/) and the REST API.
 
 services:
   - type: web
     name: agroconnect-backend
     runtime: docker
     plan: free
+    region: singapore # closest Render region to the Supabase project (ap-northeast-2, Seoul)
     healthCheckPath: /health
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -24,9 +20,11 @@ services:
         value: production
       - key: NODE_ENV
         value: production
+      # Supabase connection string, entered in the Render dashboard on first deploy.
+      # Use the Session pooler URL (Supabase > Connect > Session pooler), port 5432:
+      # postgresql://postgres.mgreapakfchcxcrauheq:<password>@aws-<n>-ap-northeast-2.pooler.supabase.com:5432/postgres
+      # The direct db.<ref>.supabase.co host is IPv6-only and unreachable from Render.
       - key: DATABASE_URL
-        fromDatabase:
-          name: agroconnect-iot-db
-          property: connectionString
+        sync: false
       - key: DEVICE_API_TOKEN
         generateValue: true # Render automatically generates a 32+ byte cryptographic secret

@@ -24,8 +24,8 @@ An end-to-end, production-ready IoT soil moisture telemetry system combining an 
        |               |
        v               v
 +-------------+ +--------------------+
-| PostgreSQL  | | Public Dashboard   |
-| Database    | | (Live Gauge/Chart) |
+| Supabase    | | Public Dashboard   |
+| PostgreSQL  | | (Live Gauge/Chart) |
 +-------------+ +--------------------+
 ```
 
@@ -35,7 +35,9 @@ An end-to-end, production-ready IoT soil moisture telemetry system combining an 
 
 ```text
 AgroConnect-IoT/
-├── render.yaml               # Render Blueprint (Web service + PostgreSQL)
+├── render.yaml               # Render Blueprint (Web service; DB on Supabase)
+├── supabase/migrations/      # Supabase SQL schema
+├── .env.example              # Local env template (DATABASE_URL, DEVICE_API_TOKEN)
 ├── Dockerfile                # Production Alpine Docker container
 ├── .dockerignore             # Excludes node_modules, secrets, firmware from Docker
 ├── .gitignore                # Excludes .env, build artifacts, system files
@@ -100,32 +102,31 @@ The test suite validates:
 
 ---
 
-## 5. Render Blueprint Deployment Steps
+## 5. Deployment: Supabase (Database) + Render Blueprint (Dashboard & API)
 
-### Step 1: Push Project to GitHub
+### Step 1: Create the Supabase database
+1. The `soil_moisture_readings` table lives in the Supabase project `mgreapakfchcxcrauheq` (region `ap-northeast-2`, Seoul), created from `supabase/migrations/20261102000000_soil_moisture_readings.sql`. The backend also creates it on startup if missing.
+2. In the [Supabase Dashboard](https://supabase.com/dashboard/project/mgreapakfchcxcrauheq), click **Connect** → **Session pooler** and copy the URI, replacing `[YOUR-PASSWORD]` with the database password:
+   `postgresql://postgres.mgreapakfchcxcrauheq:<password>@aws-<n>-ap-northeast-2.pooler.supabase.com:5432/postgres`
+
+> [!IMPORTANT]
+> Use the **Session pooler** URL, not the direct `db.<ref>.supabase.co` host. The direct host is IPv6-only and Render cannot reach it.
+
+### Step 2: Push Project to GitHub
 ```bash
-git add .
-git commit -m "Configure Render Blueprint, Dockerfile, PostgreSQL backend and ESP32 HTTPS telemetry"
 git push origin main
 ```
 
-### Step 2: Deploy on Render
-1. Log in to [Render Dashboard](https://dashboard.render.com/).
-2. Click **New +** in the top navigation and select **Blueprint**.
-3. Connect your repository: `princeabrahamshaji2027-ctrl/iot` (or `AgroConnect-IoT`).
-4. Render will parse `render.yaml` and display the planned resources:
-   - **Service:** `agroconnect-backend` (Web Service, Docker runtime, Free plan)
-   - **Database:** `agroconnect-db` (PostgreSQL, Free plan)
-5. Click **Apply**.
-6. Render will automatically:
-   - Provision the managed PostgreSQL database.
-   - Build the Docker container.
-   - Inject the `DATABASE_URL` connection string into the web service.
-   - Automatically generate a secure cryptographic `DEVICE_AUTH_TOKEN`.
-   - Start the service and verify `/health`.
+### Step 3: Deploy the Blueprint on Render
+1. In the [Render Dashboard](https://dashboard.render.com/), click **New +** → **Blueprint**.
+2. Connect the repository `princeabrahamshaji2027-ctrl/iot`.
+3. Render reads `render.yaml` and plans one resource: **`agroconnect-backend`** (Docker web service, Free plan), which serves both the dashboard and the API.
+4. When prompted for `DATABASE_URL`, paste the Supabase Session pooler URI from Step 1.
+5. Click **Apply**. Render builds the container, generates `DEVICE_API_TOKEN`, and checks `/health`.
+6. Open `https://<service>.onrender.com/health` and confirm `"database": "connected"`.
 
 > [!NOTE]
-> Render's Free PostgreSQL database expires after 30 days. For permanent long-term data retention, you can upgrade the database plan to *Starter* ($7/month) in the Render dashboard.
+> Render's free web service sleeps after 15 minutes of inactivity; the first ESP32 request after that takes ~30–60 s. Supabase's free plan pauses a project after 7 days without activity.
 
 ---
 

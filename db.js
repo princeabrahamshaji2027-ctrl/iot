@@ -8,11 +8,12 @@ const memoryReadings = [];
 
 function getPool() {
   if (!pool && process.env.DATABASE_URL) {
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production';
+    // Supabase (and any remote Postgres) requires SSL; only a local database runs without it
+    const isLocalDb = /@(localhost|127\.0\.0\.1)(:|\/)/.test(process.env.DATABASE_URL);
+    const sslDisabled = process.env.DATABASE_SSL === 'false';
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      // Render PostgreSQL requires SSL in production
-      ssl: isProduction ? { rejectUnauthorized: false } : false,
+      ssl: isLocalDb || sslDisabled ? false : { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
@@ -51,6 +52,9 @@ async function initDatabase() {
           ON soil_moisture_readings(device_id);
         CREATE INDEX IF NOT EXISTS idx_soil_readings_created_at 
           ON soil_moisture_readings(created_at DESC);
+        -- Supabase exposes the public schema through its Data API; enabling RLS with no
+        -- policies blocks anon/authenticated access. The backend's postgres role bypasses RLS.
+        ALTER TABLE soil_moisture_readings ENABLE ROW LEVEL SECURITY;
       `);
       isDbConnected = true;
       console.log('[Database] PostgreSQL connected: table "soil_moisture_readings" ready with indexes.');
